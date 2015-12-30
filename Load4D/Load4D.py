@@ -3,6 +3,7 @@ import unittest
 import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 import logging
+import dicom
 
 #
 # Load4D
@@ -48,6 +49,7 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
     dirButtonLabel = qt.QLabel('DICOM Directory: ')
     dataGridLayout.addWidget(dirButtonLabel,1,1,1,1)
     dataGridLayout.addWidget(self.dirButton,1,2,1,3)
+    self.dirButton.setMaximumWidth(500)
     orLabel = qt.QLabel('        - or - ')
     dataGridLayout.addWidget(orLabel,2,1,1,1)
     collectionsComboBoxLabel = qt.QLabel('TCIA Collection: ')
@@ -82,18 +84,20 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
     
     self.patientsTable = qt.QTableWidget()
     self.patientsTableHeaderLabels = ['ID','Name','BirthDate',
-        'Sex','Ethnic Group','Clinical Data']
-    self.patientsTable.setColumnCount(6)
+        'Sex','Modalities']
+    self.patientsTable.setColumnCount(5)
     self.patientsTable.sortingEnabled = True
     self.patientsTable.setHorizontalHeaderLabels(self.patientsTableHeaderLabels)
     self.patientsTableHeader = self.patientsTable.horizontalHeader()
     self.patientsTableHeader.setStretchLastSection(True)
     #patientGroupBoxLayout.addWidget(self.patientsTable)
-    patientGroupBoxLayout.addWidget(self.patientsTable,1,1,1,6)
+    patientGroupBoxLayout.addWidget(self.patientsTable,1,1,1,5)
+    abstractItemView =qt.QAbstractItemView()
+    self.patientsTable.setSelectionBehavior(abstractItemView.SelectRows) 
     
     self.examinePatientButton = qt.QPushButton('Examine')
     self.examinePatientButton.setEnabled(False)
-    patientGroupBoxLayout.addWidget(self.examinePatientButton,2,5,1,2)
+    patientGroupBoxLayout.addWidget(self.examinePatientButton,2,4,1,2)
     
     #
     # Other Connections
@@ -106,10 +110,54 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
 
   def onDICOMDirectoryChanged(self):
     print 'onDICOMDirectoryChanged()'
+    self.patientsTable.clear()
+    self.patientsTable.setHorizontalHeaderLabels(self.patientsTableHeaderLabels)
     self.examinePatientButton.disconnect('clicked(bool)')
     self.examinePatientButton.setText('Examine Patient')
     self.examinePatientButton.connect('clicked(bool)', self.onExaminePatient)
-    # TODO recursively read directory and populate table
+    # recursively read directory TODO make this much faster
+    self.patientFiles = {}
+    for directory, subdir, f in os.walk(self.dirButton.directory):
+      for filename in f:
+        if filename[-4:]=='.dcm':
+          filePath = os.path.join(directory,filename)
+          dcmFile = dicom.read_file(filePath)
+          patient = str(dcmFile.PatientID)
+          modality = str(dcmFile.Modality)
+          if patient not in self.patientFiles.keys():
+            self.patientFiles[patient] = {}
+            self.patientFiles[patient]['Modalities'] = []
+          if modality not in self.patientFiles[patient]:
+            self.patientFiles[patient][modality] = []
+            self.patientFiles[patient]['Modalities'].append(modality)
+          self.patientFiles[patient][modality].append(filePath)
+          self.patientFiles[patient]['PatientName'] = str(dcmFile.PatientName)
+          self.patientFiles[patient]['PatientBirthDate'] = str(dcmFile.PatientBirthDate)
+          self.patientFiles[patient]['PatientSex'] = str(dcmFile.PatientSex)
+          try:
+            self.patientFiles[patient]['EthnicGroup'] = str(dcmFile.EthnicGroup)
+          except AttributeError:
+            pass
+    
+    # populate the table
+    count = 0
+    patients = self.patientFiles.keys()
+    self.patientsTable.setRowCount(len(patients))
+    for patient in patients:
+      self.patientsTable.setItem(count,0,qt.QTableWidgetItem(patient))
+      self.patientsTable.setItem(count,1,qt.QTableWidgetItem(self.patientFiles[patient]['PatientName']))
+      self.patientsTable.setItem(count,2,qt.QTableWidgetItem(self.patientFiles[patient]['PatientBirthDate']))
+      self.patientsTable.setItem(count,3,qt.QTableWidgetItem(self.patientFiles[patient]['PatientSex']))
+      modalities = self.patientFiles[patient]['Modalities']
+      modalities.sort()
+      self.patientsTable.setItem(count,4,qt.QTableWidgetItem(','.join(modalities)))
+      count += 1
+    
+    self.patientsTable.resizeColumnsToContents()
+    self.patientsTableHeader.setStretchLastSection(True)
+    self.patientsTableHeader.setSortIndicator(0,0) # order by patient name
+             
+    print patients
     self.examinePatientButton.enabled = True
   
   def getTCIACollectionValues(self):
