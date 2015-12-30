@@ -4,6 +4,7 @@ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 import logging
 import dicom
+import json
 
 #
 # Load4D
@@ -57,8 +58,7 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
     
     try:
       m = slicer.modules.tciabrowser
-      self.tciaWidget = m.createNewWidgetRepresentation()
-      self.tcia = slicer.modules.TCIABrowserWidget
+      self.tcia = slicer.modules.tciabrowser.widgetRepresentation().self()
       self.connectTCIAButton = qt.QPushButton('Connect')
       self.connectTCIAButton.toolTip = "Connect to TCIA Server."
       dataGridLayout.addWidget(self.connectTCIAButton,3,2,1,1)
@@ -76,11 +76,10 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
     #
     # Patient Table Area
     #
-    patientGroupBox = ctk.ctkCollapsibleGroupBox()
-    patientGroupBox.setTitle('Patient Selection')
-    self.layout.addWidget(patientGroupBox)
-    #patientGroupBoxLayout = qt.QVBoxLayout(patientGroupBox)
-    patientGroupBoxLayout = qt.QGridLayout(patientGroupBox)
+    self.patientGroupBox = ctk.ctkCollapsibleGroupBox()
+    self.patientGroupBox.setTitle('Patient Selection')
+    self.layout.addWidget(self.patientGroupBox)
+    self.patientGroupBoxLayout = qt.QGridLayout(self.patientGroupBox)
     
     self.patientsTable = qt.QTableWidget()
     self.patientsTableHeaderLabels = ['ID','Name','BirthDate',
@@ -90,14 +89,13 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
     self.patientsTable.setHorizontalHeaderLabels(self.patientsTableHeaderLabels)
     self.patientsTableHeader = self.patientsTable.horizontalHeader()
     self.patientsTableHeader.setStretchLastSection(True)
-    #patientGroupBoxLayout.addWidget(self.patientsTable)
-    patientGroupBoxLayout.addWidget(self.patientsTable,1,1,1,5)
+    self.patientGroupBoxLayout.addWidget(self.patientsTable,1,1,1,5)
     abstractItemView =qt.QAbstractItemView()
     self.patientsTable.setSelectionBehavior(abstractItemView.SelectRows) 
     
     self.examinePatientButton = qt.QPushButton('Examine')
     self.examinePatientButton.setEnabled(False)
-    patientGroupBoxLayout.addWidget(self.examinePatientButton,2,4,1,2)
+    self.patientGroupBoxLayout.addWidget(self.examinePatientButton,2,4,1,2)
     
     #
     # Other Connections
@@ -106,12 +104,15 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
     
 
   def cleanup(self):
-    self.tciaWidget.delete()
+    #self.tciaWidget.delete()
+    pass
 
   def onDICOMDirectoryChanged(self):
     print 'onDICOMDirectoryChanged()'
     self.patientsTable.clear()
+    self.patientsTable.setSortingEnabled(False)
     self.patientsTable.setHorizontalHeaderLabels(self.patientsTableHeaderLabels)
+    self.patientGroupBox.setTitle('Patient Selection (DICOM Directory)')
     self.examinePatientButton.disconnect('clicked(bool)')
     self.examinePatientButton.setText('Examine Patient')
     self.examinePatientButton.connect('clicked(bool)', self.onExaminePatient)
@@ -155,9 +156,11 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
     
     self.patientsTable.resizeColumnsToContents()
     self.patientsTableHeader.setStretchLastSection(True)
+    self.patientsTable.setSortingEnabled(True)
     self.patientsTableHeader.setSortIndicator(0,0) # order by patient name
              
     print patients
+    self.patientsTable.selectRow(0)
     self.examinePatientButton.enabled = True
   
   def getTCIACollectionValues(self):
@@ -173,10 +176,36 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
     
   def onTCIACollectionChanged(self,item):
     print 'onTCIACollectionChanged()'
+    self.patientsTable.clear()
+    self.patientsTable.setSortingEnabled(False)
+    self.patientsTable.setHorizontalHeaderLabels(self.patientsTableHeaderLabels)
+    self.patientGroupBox.setTitle('Patient Selection (TCIA)')
     self.examinePatientButton.disconnect('clicked(bool)')
     self.examinePatientButton.setText("Download && Examine Patient")
     self.examinePatientButton.connect('clicked(bool)', self.onDownloadAndExaminePatient)
-    # TODO call methods from TCIA browser
+    # populate table using methods from TCIA browser
+    resp = self.tcia.TCIAClient.get_patient(collection = self.collectionsComboBox.currentText)
+    patients = json.load(resp)
+    count = 0
+    self.patientsTable.setRowCount(len(patients))
+    for patient in patients:
+      keys = patient.keys()
+      for key in keys:
+        if key == 'PatientID':
+          self.patientsTable.setItem(count,0,qt.QTableWidgetItem(str(patient['PatientID'])))
+        if key == 'PatientName':
+          self.patientsTable.setItem(count,1,qt.QTableWidgetItem(str(patient['PatientName'])))
+        if key == 'PatientBirthDate':
+          self.patientsTable.setItem(count,2,qt.QTableWidgetItem(str(patient['PatientBirthDate'])))
+        if key == 'PatientSex':
+          self.patientsTable.setItem(count,3,qt.QTableWidgetItem(str(patient['PatientSex'])))
+      count += 1
+      
+    self.patientsTable.resizeColumnsToContents()
+    self.patientsTableHeader.setStretchLastSection(True)
+    self.patientsTable.setSortingEnabled(True)
+    self.patientsTableHeader.setSortIndicator(0,0) # order by patient name
+    self.patientsTable.selectRow(0)
     self.examinePatientButton.enabled = True
     
   def onExaminePatient(self):
