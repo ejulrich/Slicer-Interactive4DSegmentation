@@ -19,14 +19,8 @@ class Segment4D(ScriptedLoadableModule):
     self.parent.categories = ["Segmentation"]
     self.parent.dependencies = []
     self.parent.contributors = ["Ethan Ulrich (University of Iowa)"]
-    self.parent.helpText = """
-    This is an example of scripted loadable module bundled in an extension.
-    It performs a simple thresholding on the input volume and optionally captures a screenshot.
-    """
-    self.parent.acknowledgementText = """
-    This file was originally developed by Jean-Christophe Fillion-Robin, Kitware Inc.
-    and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
-""" # replace with organization, grant and thanks.
+    self.parent.helpText = """TODO"""
+    self.parent.acknowledgementText = """TODO""" # replace with organization, grant and thanks.
 
 #
 # Segment4DWidget
@@ -43,98 +37,64 @@ class Segment4DWidget(ScriptedLoadableModuleWidget):
     # Instantiate and connect widgets ...
 
     #
-    # Parameters Area
+    # Format Scene Area
     #
-    parametersCollapsibleButton = ctk.ctkCollapsibleButton()
-    parametersCollapsibleButton.text = "Parameters"
-    self.layout.addWidget(parametersCollapsibleButton)
-
-    # Layout within the dummy collapsible button
-    parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
-
+    loadGroupBox = ctk.ctkCollapsibleGroupBox()
+    loadGroupBox.setTitle('Load Data')
+    self.layout.addWidget(loadGroupBox)
+    loadGroupBoxLayout = qt.QVBoxLayout(loadGroupBox)
+    loadSceneButton = qt.QPushButton('Format Scene')
+    loadGroupBoxLayout.addWidget(loadSceneButton)
+    
+    # add vertical spacer
+    self.layout.addStretch(1)
+    
     #
-    # input volume selector
+    # Format Scene Widget
     #
-    self.inputSelector = slicer.qMRMLNodeComboBox()
-    self.inputSelector.nodeTypes = ["vtkMRMLScalarVolumeNode"]
-    self.inputSelector.selectNodeUponCreation = True
-    self.inputSelector.addEnabled = False
-    self.inputSelector.removeEnabled = False
-    self.inputSelector.noneEnabled = False
-    self.inputSelector.showHidden = False
-    self.inputSelector.showChildNodeTypes = False
-    self.inputSelector.setMRMLScene( slicer.mrmlScene )
-    self.inputSelector.setToolTip( "Pick the input to the algorithm." )
-    parametersFormLayout.addRow("Input Volume: ", self.inputSelector)
-
-    #
-    # output volume selector
-    #
-    self.outputSelector = slicer.qMRMLNodeComboBox()
-    self.outputSelector.nodeTypes = ["vtkMRMLScalarVolumeNode"]
-    self.outputSelector.selectNodeUponCreation = True
-    self.outputSelector.addEnabled = True
-    self.outputSelector.removeEnabled = True
-    self.outputSelector.noneEnabled = True
-    self.outputSelector.showHidden = False
-    self.outputSelector.showChildNodeTypes = False
-    self.outputSelector.setMRMLScene( slicer.mrmlScene )
-    self.outputSelector.setToolTip( "Pick the output to the algorithm." )
-    parametersFormLayout.addRow("Output Volume: ", self.outputSelector)
-
-    #
-    # threshold value
-    #
-    self.imageThresholdSliderWidget = ctk.ctkSliderWidget()
-    self.imageThresholdSliderWidget.singleStep = 0.1
-    self.imageThresholdSliderWidget.minimum = -100
-    self.imageThresholdSliderWidget.maximum = 100
-    self.imageThresholdSliderWidget.value = 0.5
-    self.imageThresholdSliderWidget.setToolTip("Set threshold value for computing the output image. Voxels that have intensities lower than this value will set to zero.")
-    parametersFormLayout.addRow("Image threshold", self.imageThresholdSliderWidget)
-
-    #
-    # check box to trigger taking screen shots for later use in tutorials
-    #
-    self.enableScreenshotsFlagCheckBox = qt.QCheckBox()
-    self.enableScreenshotsFlagCheckBox.checked = 0
-    self.enableScreenshotsFlagCheckBox.setToolTip("If checked, take screen shots for tutorials. Use Save Data to write them to disk.")
-    parametersFormLayout.addRow("Enable Screenshots", self.enableScreenshotsFlagCheckBox)
-
-    #
-    # Apply Button
-    #
-    self.applyButton = qt.QPushButton("Apply")
-    self.applyButton.toolTip = "Run the algorithm."
-    self.applyButton.enabled = False
-    parametersFormLayout.addRow(self.applyButton)
+    self.formatSceneWidget = slicer.qMRMLWidget()
+    self.formatSceneWidget.setWindowTitle('Format Scene View')
+    self.formatSceneWidgetLayout = qt.QGridLayout(self.formatSceneWidget)
+    nodeSelectionRegion = qt.QGroupBox()
+    self.formatSceneWidgetLayout.addWidget(nodeSelectionRegion,1,1,4,1)
+    nodeSelectionRegion.setTitle('Data Selection')
+    nodeSelectionLayout = qt.QVBoxLayout(nodeSelectionRegion)
+    volumeSelectionLabel = qt.QLabel('Volume Data')
+    nodeSelectionLayout.addWidget(volumeSelectionLabel)
+    volumeSelectionList = slicer.qMRMLListWidget()
+    nodeSelectionLayout.addWidget(volumeSelectionList)
+    
+    transformSelectionLabel = qt.QLabel('Transforms')
+    nodeSelectionLayout.addWidget(transformSelectionLabel)
+    transformSelectionList = slicer.qMRMLListWidget()
+    nodeSelectionLayout.addWidget(transformSelectionList)
+    
+    addToSceneArrow = ctk.ctkPushButton()
+    self.formatSceneWidgetLayout.addWidget(addToSceneArrow,2,2,1,1)
+    removeFromSceneArrow = ctk.ctkPushButton()
+    self.formatSceneWidgetLayout.addWidget(removeFromSceneArrow,3,2,1,1)
+    
+    organizeSceneRegion = qt.QGroupBox()
+    self.formatSceneWidgetLayout.addWidget(organizeSceneRegion,1,3,4,3)
+    organizeSceneRegion.setTitle('Scene Format')
+    
+    loadFormattedSceneButton = qt.QPushButton('Load Scene')
+    self.formatSceneWidgetLayout.addWidget(loadFormattedSceneButton,5,5,1,1)
+    
+    
 
     # connections
-    self.applyButton.connect('clicked(bool)', self.onApplyButton)
-    self.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
-    self.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
-
-    # Add vertical spacer
-    self.layout.addStretch(1)
-
-    # Refresh Apply button state
-    self.onSelect()
+    loadSceneButton.connect('clicked(bool)', self.onLoadSceneButtonClicked)
     
     # change view layout
-    layoutManager = slicer.app.layoutManager()
-    layoutManager.setLayout(33) # 3x3 layout
+    #layoutManager = slicer.app.layoutManager()
+    #layoutManager.setLayout(33) # 3x3 layout
 
   def cleanup(self):
     pass
 
-  def onSelect(self):
-    self.applyButton.enabled = self.inputSelector.currentNode() and self.outputSelector.currentNode()
-
-  def onApplyButton(self):
-    logic = Segment4DLogic()
-    enableScreenshotsFlag = self.enableScreenshotsFlagCheckBox.checked
-    imageThreshold = self.imageThresholdSliderWidget.value
-    logic.run(self.inputSelector.currentNode(), self.outputSelector.currentNode(), imageThreshold, enableScreenshotsFlag)
+  def onLoadSceneButtonClicked(self):
+    self.formatSceneWidget.show()
 
 #
 # Segment4DLogic
