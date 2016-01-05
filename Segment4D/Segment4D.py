@@ -86,6 +86,18 @@ class Segment4DWidget(ScriptedLoadableModuleWidget):
     organizeSceneRegion = qt.QGroupBox()
     self.formatSceneWidgetLayout.addWidget(organizeSceneRegion,1,3,4,3)
     organizeSceneRegion.setTitle('Scene Format')
+    self.organizeSceneRegionLayout = qt.QGridLayout(organizeSceneRegion)
+    backgroundVolumeLabel = qt.QLabel('Background')
+    self.organizeSceneRegionLayout.addWidget(backgroundVolumeLabel,1,1,1,1)
+    backgroundVolumeBox = slicer.qMRMLListWidget()
+    self.organizeSceneRegionLayout.addWidget(backgroundVolumeBox,2,1,1,1)
+    foregroundVolumeLabel = qt.QLabel('Foreground')
+    self.organizeSceneRegionLayout.addWidget(foregroundVolumeLabel,3,1,1,1)
+    foregroundVolumeBox = slicer.qMRMLListWidget()
+    self.organizeSceneRegionLayout.addWidget(foregroundVolumeBox,4,1,1,1)
+    
+    self.addColumnButton = qt.QPushButton('+Add')
+    self.organizeSceneRegionLayout.addWidget(self.addColumnButton,2,2,1,1)
     
     loadFormattedSceneButton = qt.QPushButton('Load Scene')
     self.formatSceneWidgetLayout.addWidget(loadFormattedSceneButton,5,5,1,1)
