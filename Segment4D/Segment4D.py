@@ -46,6 +46,15 @@ class Segment4DWidget(ScriptedLoadableModuleWidget):
     loadSceneButton = qt.QPushButton('Format Scene')
     loadGroupBoxLayout.addWidget(loadSceneButton)
     
+    #
+    # Editor Widget
+    #
+    editorWidget = slicer.modules.editor.widgetRepresentation().self()
+    self.labelEditor = editorWidget.editLabelMapsFrame
+    self.layout.addWidget(self.labelEditor)
+    self.labelEditor.collapsed = False
+    
+    
     # add vertical spacer
     self.layout.addStretch(1)
     
@@ -85,6 +94,7 @@ class Segment4DWidget(ScriptedLoadableModuleWidget):
 
     # connections
     loadSceneButton.connect('clicked(bool)', self.onLoadSceneButtonClicked)
+    #self.formatSceneWidget.connect(')
     
     # change view layout
     #layoutManager = slicer.app.layoutManager()
