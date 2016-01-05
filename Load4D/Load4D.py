@@ -118,8 +118,17 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
     self.examinePatientButton.connect('clicked(bool)', self.onExaminePatient)
     # recursively read directory TODO make this much faster
     self.patientFiles = {}
+    pd = qt.QProgressDialog('Reading Files...', 'Cancel', 0, 100, slicer.util.mainWindow())
+    pd.setModal(True)
+    pd.setMinimumDuration(0)
+    pd.show()
+    pd.setValue(0)
     for directory, subdir, f in os.walk(self.dirButton.directory):
+      numFiles = len(f)
+      fileProg = 0
       for filename in f:
+        pd.setValue(100*fileProg/numFiles)
+        slicer.app.processEvents()
         if filename[-4:]=='.dcm':
           filePath = os.path.join(directory,filename)
           dcmFile = dicom.read_file(filePath)
@@ -139,6 +148,8 @@ class Load4DWidget(ScriptedLoadableModuleWidget):
             self.patientFiles[patient]['EthnicGroup'] = str(dcmFile.EthnicGroup)
           except AttributeError:
             pass
+        fileProg += 1
+    pd.setValue(100)
     
     # populate the table
     count = 0
