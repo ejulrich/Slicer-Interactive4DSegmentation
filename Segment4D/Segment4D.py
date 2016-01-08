@@ -40,11 +40,44 @@ class Segment4DWidget(ScriptedLoadableModuleWidget):
     # Format Scene Area
     #
     loadGroupBox = ctk.ctkCollapsibleGroupBox()
-    loadGroupBox.setTitle('Load Data')
+    loadGroupBox.setTitle('Sequence Data')
     self.layout.addWidget(loadGroupBox)
-    loadGroupBoxLayout = qt.QVBoxLayout(loadGroupBox)
-    loadSceneButton = qt.QPushButton('Format Scene')
-    loadGroupBoxLayout.addWidget(loadSceneButton)
+    loadGroupBoxLayout = qt.QFormLayout(loadGroupBox)
+    
+    self.volumeSequenceComboBox = slicer.qMRMLNodeComboBox()
+    self.volumeSequenceComboBox.nodeTypes = ( ("vtkMRMLSequenceNode"), "" )
+    self.volumeSequenceComboBox.setMRMLScene( slicer.mrmlScene )
+    self.volumeSequenceComboBox.noneEnabled = False
+    loadGroupBoxLayout.addRow('Volume Sequence: ',self.volumeSequenceComboBox)
+    
+    self.transformSequenceComboBox = slicer.qMRMLNodeComboBox()
+    self.transformSequenceComboBox.nodeTypes = ( ("vtkMRMLSequenceNode"), "" )
+    self.transformSequenceComboBox.selectNodeUponCreation = False
+    self.transformSequenceComboBox.setMRMLScene( slicer.mrmlScene )
+    self.transformSequenceComboBox.noneEnabled = True
+    loadGroupBoxLayout.addRow('Transform Sequence: ',self.transformSequenceComboBox)
+    
+    self.labelSequenceComboBox = slicer.qMRMLNodeComboBox()
+    self.labelSequenceComboBox.nodeTypes = ( ("vtkMRMLSequenceNode"), "" )
+    self.labelSequenceComboBox.selectNodeUponCreation = False
+    self.labelSequenceComboBox.setMRMLScene( slicer.mrmlScene )
+    self.labelSequenceComboBox.noneEnabled = True
+    loadGroupBoxLayout.addRow('Label Sequence: ',self.labelSequenceComboBox)
+    
+    sliceButtonsLayout = qt.QHBoxLayout()
+    loadGroupBoxLayout.addRow('Slice Views: ',sliceButtonsLayout)
+    self.axialCheckbox = qt.QCheckBox('Axial')
+    self.axialCheckbox.checked = True
+    sliceButtonsLayout.addWidget(self.axialCheckbox)
+    self.sagittalCheckBox = qt.QCheckBox('Sagittal')
+    self.sagittalCheckBox.checked = True
+    sliceButtonsLayout.addWidget(self.sagittalCheckBox)
+    self.coronalCheckBox = qt.QCheckBox('Coronal')
+    self.coronalCheckBox.checked = False
+    sliceButtonsLayout.addWidget(self.coronalCheckBox)
+    
+    formatSceneButton = qt.QPushButton('Format Scene')
+    loadGroupBoxLayout.addRow('',formatSceneButton)
     
     #
     # Editor Widget
@@ -84,28 +117,41 @@ class Segment4DWidget(ScriptedLoadableModuleWidget):
     self.formatSceneWidgetLayout.addWidget(removeFromSceneArrow,3,2,1,1)
     
     organizeSceneRegion = qt.QGroupBox()
-    self.formatSceneWidgetLayout.addWidget(organizeSceneRegion,1,3,4,3)
+    self.formatSceneWidgetLayout.addWidget(organizeSceneRegion,1,3,4,5)
     organizeSceneRegion.setTitle('Scene Format')
     self.organizeSceneRegionLayout = qt.QGridLayout(organizeSceneRegion)
-    backgroundVolumeLabel = qt.QLabel('Background')
-    self.organizeSceneRegionLayout.addWidget(backgroundVolumeLabel,1,1,1,1)
-    backgroundVolumeBox = slicer.qMRMLListWidget()
-    self.organizeSceneRegionLayout.addWidget(backgroundVolumeBox,2,1,1,1)
-    foregroundVolumeLabel = qt.QLabel('Foreground')
-    self.organizeSceneRegionLayout.addWidget(foregroundVolumeLabel,3,1,1,1)
-    foregroundVolumeBox = slicer.qMRMLListWidget()
-    self.organizeSceneRegionLayout.addWidget(foregroundVolumeBox,4,1,1,1)
+    self.backgroundSceneButtons = []
+    backgroundVolumeBox = qt.QPushButton('Background')
+    backgroundVolumeBox.setCheckable(True)
+    #backgroundVolumeBox.connect('toggled(bool)',self.testClick)
+    
+    self.organizeSceneRegionLayout.addWidget(backgroundVolumeBox,1,1,1,1)
+    self.backgroundSceneButtons.append(backgroundVolumeBox)
+    
+    self.foregroundSceneButtons = []
+    foregroundVolumeBox = qt.QPushButton('Foreground')
+    foregroundVolumeBox.setCheckable(True)
+    self.organizeSceneRegionLayout.addWidget(foregroundVolumeBox,2,1,1,1)
+    #foregroundVolumeBox.connect('toggled(bool)',self.testClick)
+    backgroundVolumeBox.connect('clicked()',lambda i=1: self.backgroundButtonClicked(i))
+    foregroundVolumeBox.connect('clicked()',lambda i=1: self.foregroundButtonClicked(i))
+    
+    self.backgroundSceneButtons.append(backgroundVolumeBox)
+    self.foregroundSceneButtons.append(foregroundVolumeBox)
+    #self.backgroundSceneButtons[0].connect('clicked(bool)', self.backgroundButtonClicked(1))
+    #self.foregroundSceneButtons[0].connect('clicked(bool)', self.foregroundButtonClicked(1))
     
     self.addColumnButton = qt.QPushButton('+Add')
-    self.organizeSceneRegionLayout.addWidget(self.addColumnButton,2,2,1,1)
+    self.organizeSceneRegionLayout.addWidget(self.addColumnButton,1,2,1,1)
+    self.sceneColumns = 1
     
     loadFormattedSceneButton = qt.QPushButton('Load Scene')
-    self.formatSceneWidgetLayout.addWidget(loadFormattedSceneButton,5,5,1,1)
-    
+    self.formatSceneWidgetLayout.addWidget(loadFormattedSceneButton,5,8,1,1)
     
 
     # connections
-    loadSceneButton.connect('clicked(bool)', self.onLoadSceneButtonClicked)
+    formatSceneButton.connect('clicked(bool)', self.onFormatSceneButtonClicked)
+    self.addColumnButton.connect('clicked(bool)', self.onAddColumn)
     #self.formatSceneWidget.connect(')
     
     # change view layout
@@ -113,10 +159,114 @@ class Segment4DWidget(ScriptedLoadableModuleWidget):
     #layoutManager.setLayout(33) # 3x3 layout
 
   def cleanup(self):
-    pass
+    for b in self.backgroundSceneButtons:
+      b.disconnect('clicked(bool)')
+    for b in self.foregroundSceneButtons:
+      b.disconnect('clicked(bool)')
+    self.backgroundSceneButtons = []
+    self.foregroundSceneButtons = []
+
+  def onFormatSceneButtonClicked(self):
+    numRows = 0
+    for checkBox in [self.axialCheckbox, self.sagittalCheckBox, self.coronalCheckBox]:
+      if checkBox.checked:
+        numRows += 1
+    volumeSequenceNode = self.volumeSequenceComboBox.currentNode()
+    numColumns = volumeSequenceNode.GetNumberOfDataNodes()
+
+    # TODO support all possible views
+    layoutManager = slicer.app.layoutManager()
+    if [numRows,numColumns]==[1,1]:
+      layoutManager.setLayout(6) # Red Slice view only
+    elif [numRows,numColumns]==[1,2]:
+      layoutManager.setLayout(29)
+    elif [numRows,numColumns]==[2,2]:
+      layoutManager.setLayout(27)
+    elif [numRows,numColumns]==[2,3]:
+      layoutManager.setLayout(21)
+    elif [numRows,numColumns]==[2,4]:
+      layoutManager.setLayout(31)
+    elif [numRows,numColumns]==[3,3]:
+      layoutManager.setLayout(33)
+    elif [numRows,numColumns]==[3,4]:
+      layoutManager.setLayout(30)
+    else:
+      slicer.util.errorDisplay(str(numRows)+'x'+str(numColumns)+' currently not implemented')
 
   def onLoadSceneButtonClicked(self):
     self.formatSceneWidget.show()
+
+  def onAddColumn(self):
+    self.sceneColumns += 1
+    colIdx = self.sceneColumns
+    self.organizeSceneRegionLayout.addWidget(self.addColumnButton,1,1+colIdx,1,1)
+    
+    backgroundVolumeBox = qt.QPushButton('Background')
+    self.organizeSceneRegionLayout.addWidget(backgroundVolumeBox,1,colIdx,1,1)
+    backgroundVolumeBox.setCheckable(True)
+    #backgroundVolumeBox.connect('toggled(bool)',self.testClick)
+    backgroundVolumeBox.connect('clicked()',lambda i=colIdx: self.backgroundButtonClicked(i))
+    self.backgroundSceneButtons.append(backgroundVolumeBox)
+  #self.backgroundSceneButtons[self.sceneColumns-1].connect('clicked(bool)',self.backgroundButtonClicked(self.sceneColumns))
+
+    foregroundVolumeBox = qt.QPushButton('Foreground')
+    self.organizeSceneRegionLayout.addWidget(foregroundVolumeBox,2,colIdx,1,1)
+    foregroundVolumeBox.setCheckable(True)
+    #foregroundVolumeBox.connect('toggled(bool)',self.testClick)
+    foregroundVolumeBox.connect('clicked()',lambda i=colIdx: self.foregroundButtonClicked(i))
+    self.foregroundSceneButtons.append(foregroundVolumeBox)
+  #self.foregroundSceneButtons[self.sceneColumns-1].connect('clicked(bool)',self.foregroundButtonClicked(self.sceneColumns))
+    
+    removeButton = qt.QPushButton('Remove')
+    self.organizeSceneRegionLayout.addWidget(removeButton,3,colIdx,1,1)
+
+  def backgroundButtonClicked(self,colNum):
+    print 'backgroundButtonClicked('+str(colNum)+')'
+    for b in self.backgroundSceneButtons:
+      idx = self.backgroundSceneButtons.index(b)+1
+      if idx == colNum:
+        b.disconnect('clicked()')
+      else:
+        b.disconnect('clicked()')
+        b.checked = False
+        b.connect('clicked()',lambda i=idx: self.backgroundButtonClicked(i))
+    for b in self.foregroundSceneButtons:
+      idx = self.foregroundSceneButtons.index(b)+1
+      b.disconnect('clicked()')
+      b.checked = False
+      b.connect('clicked()',lambda i=idx: self.foregroundButtonClicked(i))
+    #slicer.util.errorDisplay('yes')
+
+  def foregroundButtonClicked(self,colNum):
+    print 'foregroundButtonClicked('+str(colNum)+')'
+    for b in self.foregroundSceneButtons:
+      idx = self.foregroundSceneButtons.index(b)+1
+      if idx == colNum:
+        b.disconnect('clicked()')
+      else:
+        b.disconnect('clicked()')
+        b.checked = False
+        b.connect('clicked()',lambda i=idx: self.foregroundButtonClicked(i))
+    for b in self.backgroundSceneButtons:
+      idx = self.backgroundSceneButtons.index(b)+1
+      b.disconnect('clicked()')
+      b.checked = False
+      b.connect('clicked()',lambda i=idx: self.backgroundButtonClicked(i))
+
+  def testClick(self):
+    #slicer.util.errorDisplay('testClick')
+    idx = 0
+    bChecked = False
+    fChecked = False
+    for b in self.backgroundSceneButtons:
+      if b.checked:
+        idx = self.backgroundSceneButtons.index(b)+1
+        bChecked = True
+      else:
+        b.disconnect('toggled(bool)')
+        b.checked = False
+        b.connect('toggled(bool)',self.testClick)
+
 
 #
 # Segment4DLogic
